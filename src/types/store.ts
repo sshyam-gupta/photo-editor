@@ -25,7 +25,7 @@ export interface AppState {
   imgURL?: any;
   canvasDivHeight?: number | null;
   canvasDivWidth?: number | null;
-  cropDivClickedResizeRegion: boolean;
+  cropDivClickedResizeRegion: Region | boolean;
   cropDivClickInitialX?: number | null;
   cropDivClickInitialY?: number | null;
   cropDivWidth: number;
@@ -39,4 +39,11 @@ export interface AppState {
 export interface ReduxAction {
   type: string
   payload: any
+}
+
+export enum Region {
+  RB ="RB",
+  RT = "RT",
+  LT = "LT",
+  LB = "LB",
 }

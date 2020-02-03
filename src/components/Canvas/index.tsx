@@ -4,39 +4,87 @@ import { DropTarget } from 'react-dnd'
 
 import './styles.css'
 import CropElement from '../CropElement'
-import { AppState } from '../../types/store'
-import { ActionType } from '../../constants/actionType'
+import { AppState, Region } from '../../types/store'
+import {
+  setWidthAndHeight,
+  downloadImage,
+  toggleHorizontalFlip,
+  toggleVerticalFlip,
+  resetRotate,
+  setImgURL,
+  handleScaleChange,
+  setCropDivSize,
+  setCropDivLeftAndTop,
+  setCropDivLeftAndTopPlain,
+  handleFileChange
+} from "../../store/actions/canvas";
 
-const canvasTarget = {
-  drop(props: any, monitor: any, component: any) {
-    component.updateStateOnDrop(monitor)
-  }
+interface State {
+  imageName: string;
+  image: any;
+  height: number;
+  width: number;
+  brightnessValue: number;
+  contrastValue: number;
+  blurValue: number;
+  saturateValue: number;
+  showCropCanvas: boolean;
+  textInput: string;
+  showTextField: boolean;
+  inputColor: string;
+  textSize: number;
+  downloadImageFlag: boolean;
+  scaleValue: number;
+  horizontalFlip: boolean;
+  verticalFlip: boolean;
+  rotateCanvas: number;
+  fineTuneRotate: number;
+  showRotateSection: boolean;
+  canvasDivHeight: number;
+  canvasDivWidth: number;
+  cropDivClickedResizeRegion: Region | boolean;
+  cropDivClickInitialX: number;
+  cropDivClickInitialY: number;
+  cropDivWidth: number;
+  cropDivHeight: number;
+  cropDivTop: number;
+  cropDivLeft: number;
+  cropImage: boolean;
+  showSlider: boolean;
 }
 
-function collect(connect: any, monitor: any) {
-  return {
-    connectDropTarget: connect.dropTarget(),
-    isOver: monitor.isOver(),
-    canDrop: monitor.canDrop(),
-    itemType: monitor.getItemType(),
-    monitor: monitor
-  }
+interface Props {
+  setWidthAndHeight(data: { width: number, height: number }): void
+
+  downloadImage(imgUrl: string): void
+  setImgURL(imgUrl: string): void
+
+  toggleHorizontalFlip(flag: boolean): void
+  toggleVerticalFlip(flag: boolean): void
+  resetRotate(): void
+  handleScaleChange(scale: number): void
+
+  setCropDivSize(data: { region: Region, width: number, height: number }): void
+  setCropDivLeftAndTop(data: { top: number, left: number }): void
+  setCropDivLeftAndTopPlain(data: { top: number, left: number }): void
+  handleUploadedFile(data: { result: string, fileName: string, width: number, height: number }): void
 }
 
-class Canvas extends Component<any, any> {
-  canvasRef: any
-  constructor(props: any) {
-    super(props)
-    this.canvasRef = React.createRef()
-  }
+interface CanvasProps extends State, Props {
+  connectDropTarget: any
+}
 
-  componentWillMount() {
+
+class Canvas extends Component<CanvasProps> {
+  canvasRef = React.createRef<HTMLCanvasElement>()
+
+  componentDidMount() {
     window.addEventListener('beforeunload', ev => {
       ev.preventDefault()
 
       // SAVE TO LOCAL STORAGE
       const node = this.canvasRef.current
-      let imgURL = node.toDataURL('image/png')
+      let imgURL = node!.toDataURL('image/png')
       localStorage.removeItem('image')
       localStorage.setItem(
         'image',
@@ -49,147 +97,7 @@ class Canvas extends Component<any, any> {
     })
   }
 
-  updateStateOnDrop(monitor: any) {
-    const item = monitor.getItem()
-    const delta = monitor.getDifferenceFromInitialOffset()
-    let left = Math.round(item.left + delta.x)
-    let top = Math.round(item.top + delta.y)
-
-    if (left <= 0) {
-      left = 0
-    } else if (left + this.props.cropDivWidth >= this.props.width) {
-      left = this.props.width - this.props.cropDivWidth
-    }
-    if (top <= 0) {
-      top = 0
-    } else if (top + this.props.cropDivHeight >= this.props.height) {
-      top = this.props.height - this.props.cropDivHeight
-    }
-
-    this.props.setCropDivLeftAndTopPlain(top, left)
-  }
-
-  drawCanvas(img: any, prevProps: any) {
-    if (!this.props.width) {
-      if (
-        img.height + 100 > this.props.canvasDivHeight ||
-        img.width + 250 > this.props.canvasDivWidth
-      ) {
-        // AUTO SCALE
-        let diffHeight = img.height + 145 - this.props.canvasDivHeight
-        let diffWidth = img.width + 250 - this.props.canvasDivWidth
-        if (diffHeight > 3500 || diffWidth > 3500) {
-          this.props.handleScaleChange(15)
-        } else if (diffHeight > 3000 || diffWidth > 3000) {
-          this.props.handleScaleChange(20)
-        } else if (diffHeight > 2500 || diffWidth > 2500) {
-          this.props.handleScaleChange(25)
-        } else if (diffHeight > 2000 || diffWidth > 2000) {
-          this.props.handleScaleChange(30)
-        } else if (diffHeight > 1000 || diffWidth > 1000) {
-          this.props.handleScaleChange(40)
-        } else if (diffHeight > 800 || diffWidth > 800) {
-          this.props.handleScaleChange(50)
-        } else if (diffHeight > 600 || diffWidth > 600) {
-          this.props.handleScaleChange(60)
-        } else if (diffHeight > 400 || diffWidth > 400) {
-          this.props.handleScaleChange(70)
-        } else if (diffHeight > 200 || diffWidth > 200) {
-          this.props.handleScaleChange(80)
-        } else if (diffHeight <= 200) {
-          this.props.handleScaleChange(95)
-        }
-      }
-      this.props.setWidthAndHeight(img.width, img.height)
-    }
-
-    const node = this.canvasRef.current
-    const context = node.getContext('2d')
-
-    // HORIZONTAL FLIP
-    if (this.props.horizontalFlip) {
-      context.translate(this.props.width, 0)
-      context.scale(-1, 1)
-      this.props.toggleHorizontalFlip(this.props.horizontalFlip)
-    }
-
-    // VERTICAL FLIP
-    if (this.props.verticalFlip) {
-      context.translate(0, this.props.height)
-      context.scale(1, -1)
-      this.props.toggleVerticalFlip(this.props.verticalFlip)
-    }
-
-    // ROTATE IMAGE
-    if (this.props.showRotateSection) {
-      context.fillRect(0, 0, this.props.width, this.props.height)
-      context.fillStyle = '#000000'
-
-      // Move registration point to the center of the canvas
-      context.translate(this.props.width / 2, this.props.height / 2)
-
-      context.rotate((this.props.rotateCanvas * Math.PI) / 180)
-
-      // // Rotate 1 degree
-      context.rotate((this.props.fineTuneRotate * Math.PI) / 180)
-
-      // Move registration point back to the top left corner of canvas
-      context.translate(-this.props.width / 2, -this.props.height / 2)
-      this.props.resetRotate()
-    }
-
-    // BRIGHTNESS
-    let brightness = 'brightness(' + (50 + this.props.brightnessValue).toString() + '%) '
-
-    // CONTRAST
-    let contrast = 'contrast(' + (50 + this.props.contrastValue).toString() + '%) '
-
-    // BLUR
-    let blur = 'blur(' + (this.props.blurValue / 18).toString() + 'px) '
-
-    //SATURATE
-    let saturate = 'saturate(' + (50 + this.props.saturateValue).toString() + '%) '
-
-    context.filter = brightness + contrast + blur + saturate
-
-    if (this.props.cropImage) {
-      this.props.setWidthAndHeight(this.props.cropDivWidth, this.props.cropDivHeight)
-      context.drawImage(
-        img,
-        this.props.cropDivLeft,
-        this.props.cropDivTop,
-        this.props.cropDivWidth,
-        this.props.cropDivHeight,
-        0,
-        0,
-        this.props.cropDivWidth,
-        this.props.cropDivHeight
-      )
-      let imgURL = node.toDataURL('image/png')
-      this.props.handleUploadedFile({
-        result: imgURL,
-        fileName: this.props.imageName,
-        width: this.props.cropDivWidth,
-        height: this.props.cropDivHeight
-      })
-    }
-
-    context.drawImage(img, 0, 0, this.props.width, this.props.height)
-
-    // TEXT
-    context.font = 'bold ' + this.props.textSize + 'px Arial'
-    context.fillStyle = this.props.inputColor
-    context.textAlign = 'center'
-    context.fillText(this.props.textInput, this.props.width / 2, this.props.height / 2)
-
-    if (this.props.downloadImageFlag) {
-      let imgURL = node.toDataURL('image/png')
-      this.props.setImgURL(imgURL)
-      this.props.downloadImage(imgURL)
-    }
-  }
-
-  componentDidUpdate(prevProps: any) {
+  componentDidUpdate(prevProps: CanvasProps) {
     if (
       prevProps.showCropCanvas !== this.props.showCropCanvas ||
       prevProps.showRotateSection !== this.props.showRotateSection ||
@@ -199,7 +107,154 @@ class Canvas extends Component<any, any> {
     } else {
       var img = new Image()
       img.src = this.props.image
-      img.onload = () => this.drawCanvas(img, prevProps)
+      img.onload = () => this.drawCanvas(img)
+    }
+  }
+
+  updateStateOnDrop(monitor: any) {
+    const { cropDivWidth, width, cropDivHeight, height } = this.props;
+    const item = monitor.getItem()
+    const delta = monitor.getDifferenceFromInitialOffset()
+    let left = Math.round(item.left + delta.x)
+    let top = Math.round(item.top + delta.y)
+
+    if (left <= 0) {
+      left = 0
+    } else if (left + cropDivWidth >= width) {
+      left = width - cropDivWidth
+    }
+    if (top <= 0) {
+      top = 0
+    } else if (top + cropDivHeight >= height) {
+      top = height - cropDivHeight
+    }
+
+    this.props.setCropDivLeftAndTopPlain({ top, left })
+  }
+
+  handleScale(diffHeight: number, diffWidth: number) {
+    const { handleScaleChange } = this.props;
+    if (diffHeight > 3500 || diffWidth > 3500) {
+      handleScaleChange(15)
+    } else if (diffHeight > 3000 || diffWidth > 3000) {
+      handleScaleChange(20)
+    } else if (diffHeight > 2500 || diffWidth > 2500) {
+      handleScaleChange(25)
+    } else if (diffHeight > 2000 || diffWidth > 2000) {
+      handleScaleChange(30)
+    } else if (diffHeight > 1000 || diffWidth > 1000) {
+      handleScaleChange(40)
+    } else if (diffHeight > 800 || diffWidth > 800) {
+      handleScaleChange(50)
+    } else if (diffHeight > 600 || diffWidth > 600) {
+      handleScaleChange(60)
+    } else if (diffHeight > 400 || diffWidth > 400) {
+      handleScaleChange(70)
+    } else if (diffHeight > 200 || diffWidth > 200) {
+      handleScaleChange(80)
+    } else if (diffHeight <= 200) {
+      handleScaleChange(95)
+    }
+  }
+
+  drawCanvas(img: HTMLImageElement) {
+    const { width, height, canvasDivHeight, canvasDivWidth, horizontalFlip, verticalFlip, showRotateSection, rotateCanvas, fineTuneRotate, brightnessValue, contrastValue, blurValue, saturateValue, cropDivWidth, cropDivHeight } = this.props;
+    if (!width) {
+      if (
+        img.height + 100 > canvasDivHeight ||
+        img.width + 250 > canvasDivWidth
+      ) {
+        // AUTO SCALE
+        const diffHeight = img.height + 145 - canvasDivHeight
+        const diffWidth = img.width + 250 - canvasDivWidth
+        this.handleScale(diffHeight, diffWidth)
+      }
+      this.props.setWidthAndHeight({ width: img.width, height: img.height })
+    }
+
+    const node = this.canvasRef.current
+    const context = node!.getContext('2d')!
+
+    // HORIZONTAL FLIP
+    if (horizontalFlip) {
+      context.translate(width, 0)
+      context.scale(-1, 1)
+      this.props.toggleHorizontalFlip(horizontalFlip)
+    }
+
+    // VERTICAL FLIP
+    if (verticalFlip) {
+      context.translate(0, height)
+      context.scale(1, -1)
+      this.props.toggleVerticalFlip(verticalFlip)
+    }
+
+    // ROTATE IMAGE
+    if (showRotateSection) {
+      context.fillRect(0, 0, width, height)
+      context.fillStyle = '#000000'
+
+      // Move registration point to the center of the canvas
+      context.translate(width / 2, height / 2)
+
+      context.rotate((rotateCanvas * Math.PI) / 180)
+
+      // // Rotate 1 degree
+      context.rotate((fineTuneRotate * Math.PI) / 180)
+
+      // Move registration point back to the top left corner of canvas
+      context.translate(-width / 2, -height / 2)
+      this.props.resetRotate()
+    }
+
+    // BRIGHTNESS
+    let brightness = 'brightness(' + (50 + brightnessValue).toString() + '%) '
+
+    // CONTRAST
+    let contrast = 'contrast(' + (50 + contrastValue).toString() + '%) '
+
+    // BLUR
+    let blur = 'blur(' + (blurValue / 18).toString() + 'px) '
+
+    //SATURATE
+    let saturate = 'saturate(' + (50 + saturateValue).toString() + '%) '
+
+    context.filter = brightness + contrast + blur + saturate
+
+    if (this.props.cropImage) {
+      this.props.setWidthAndHeight({ width: cropDivWidth, height: cropDivHeight })
+      context.drawImage(
+        img,
+        this.props.cropDivLeft,
+        this.props.cropDivTop,
+        cropDivWidth,
+        cropDivHeight,
+        0,
+        0,
+        cropDivWidth,
+        cropDivHeight
+      )
+      let imgURL = node!.toDataURL('image/png')
+      this.props.handleUploadedFile({
+        result: imgURL,
+        fileName: this.props.imageName,
+        width: cropDivWidth,
+        height: cropDivHeight
+      })
+    }
+
+    context.drawImage(img, 0, 0, width, height)
+
+    // TEXT
+    context.font = 'bold ' + this.props.textSize + 'px Arial'
+    context.fillStyle = this.props.inputColor
+    context.textAlign = 'center'
+    context.fillText(this.props.textInput, width / 2, height / 2)
+
+    if (this.props.downloadImageFlag) {
+      let imgURL = node!.toDataURL('image/png')
+      this.props.setImgURL(imgURL)
+      this.props.downloadImage(imgURL)
     }
   }
 
@@ -211,17 +266,17 @@ class Canvas extends Component<any, any> {
 
     let diffY = mouseYInCropElement - (this.props.cropDivClickInitialY + this.props.cropDivTop)
 
-    if (this.props.cropDivClickedResizeRegion === 'RB') {
-      this.props.setCropDivSize('RB', diffX, diffY)
-    } else if (this.props.cropDivClickedResizeRegion === 'RT') {
-      this.props.setCropDivLeftAndTop(diffY, 0)
-      this.props.setCropDivSize('RT', diffX, -diffY)
-    } else if (this.props.cropDivClickedResizeRegion === 'LT') {
-      this.props.setCropDivLeftAndTop(diffY, diffX)
-      this.props.setCropDivSize('LT', -diffX, -diffY)
-    } else if (this.props.cropDivClickedResizeRegion === 'LB') {
-      this.props.setCropDivLeftAndTop(0, diffX)
-      this.props.setCropDivSize('LT', -diffX, diffY)
+    if (this.props.cropDivClickedResizeRegion === Region.RB) {
+      this.props.setCropDivSize({ region: Region.RB, width: diffX, height: diffY })
+    } else if (this.props.cropDivClickedResizeRegion === Region.RT) {
+      this.props.setCropDivLeftAndTop({ top: diffY, left: 0 })
+      this.props.setCropDivSize({ region: Region.RT, width: diffX, height: -diffY })
+    } else if (this.props.cropDivClickedResizeRegion === Region.LT) {
+      this.props.setCropDivLeftAndTop({ top: diffY, left: diffX })
+      this.props.setCropDivSize({ region: Region.LT, width: -diffX, height: -diffY })
+    } else if (this.props.cropDivClickedResizeRegion === Region.LB) {
+      this.props.setCropDivLeftAndTop({ top: 0, left: diffX })
+      this.props.setCropDivSize({ region: Region.LT, width: -diffX, height: diffY })
     }
   }
 
@@ -261,113 +316,72 @@ class Canvas extends Component<any, any> {
   }
 }
 
-const mapStateToProps = (state: AppState) => {
-  return {
-    image: state.image,
-    height: state.height,
-    width: state.width,
-    imageName: state.imageName,
-    brightnessValue: state.brightnessSliderValue,
-    contrastValue: state.contrastSliderValue,
-    blurValue: state.blurSliderValue,
-    saturateValue: state.saturateSliderValue,
-    showCropCanvas: state.showCropCanvas,
-    textInput: state.textInput,
-    showTextField: state.showTextField,
-    inputColor: state.inputColor,
-    textSize: state.textSize,
-    downloadImageFlag: state.downloadImageFlag,
-    scaleValue: state.scaleValue,
-    horizontalFlip: state.horizontalFlip,
-    verticalFlip: state.verticalFlip,
-    rotateCanvas: state.rotateCanvas,
-    fineTuneRotate: state.fineTuneRotate,
-    showRotateSection: state.showRotateSection,
-    canvasDivHeight: state.canvasDivHeight,
-    canvasDivWidth: state.canvasDivWidth,
-    cropDivClickedResizeRegion: state.cropDivClickedResizeRegion,
-    cropDivClickInitialX: state.cropDivClickInitialX,
-    cropDivClickInitialY: state.cropDivClickInitialY,
-    cropDivWidth: state.cropDivWidth,
-    cropDivHeight: state.cropDivHeight,
-    cropDivTop: state.cropDivTop,
-    cropDivLeft: state.cropDivLeft,
-    cropImage: state.cropImage,
-    showSlider: state.showSlider
+const mapStateToProps = (state: AppState) => ({
+  image: state.image,
+  height: state.height,
+  width: state.width,
+  imageName: state.imageName,
+  brightnessValue: state.brightnessSliderValue,
+  contrastValue: state.contrastSliderValue,
+  blurValue: state.blurSliderValue,
+  saturateValue: state.saturateSliderValue,
+  showCropCanvas: state.showCropCanvas,
+  textInput: state.textInput,
+  showTextField: state.showTextField,
+  inputColor: state.inputColor,
+  textSize: state.textSize,
+  downloadImageFlag: state.downloadImageFlag,
+  scaleValue: state.scaleValue,
+  horizontalFlip: state.horizontalFlip,
+  verticalFlip: state.verticalFlip,
+  rotateCanvas: state.rotateCanvas,
+  fineTuneRotate: state.fineTuneRotate,
+  showRotateSection: state.showRotateSection,
+  canvasDivHeight: state.canvasDivHeight,
+  canvasDivWidth: state.canvasDivWidth,
+  cropDivClickedResizeRegion: state.cropDivClickedResizeRegion,
+  cropDivClickInitialX: state.cropDivClickInitialX,
+  cropDivClickInitialY: state.cropDivClickInitialY,
+  cropDivWidth: state.cropDivWidth,
+  cropDivHeight: state.cropDivHeight,
+  cropDivTop: state.cropDivTop,
+  cropDivLeft: state.cropDivLeft,
+  cropImage: state.cropImage,
+  showSlider: state.showSlider
+})
+
+const createActions = {
+  setWidthAndHeight,
+  downloadImage,
+  toggleHorizontalFlip,
+  toggleVerticalFlip,
+  resetRotate,
+  setImgURL,
+  handleScaleChange,
+  setCropDivSize,
+  setCropDivLeftAndTop,
+  setCropDivLeftAndTopPlain,
+  handleUploadedFile: handleFileChange
+};
+
+const canvasTarget = {
+  drop(props: any, monitor: any, component: any) {
+    component.updateStateOnDrop(monitor)
   }
 }
 
-const mapDispatchToProps = (dispatch: any) => {
+function collect(connect: any, monitor: any) {
   return {
-    setWidthAndHeight: (width: any, height: any) => {
-      dispatch({
-        type: ActionType.SET_WIDTH_AND_HEIGHT,
-        payload: { width, height }
-      })
-    },
-    downloadImage: (imgURL: string) => {
-      dispatch({ type: ActionType.DOWNLOAD_IMAGE, payload: imgURL })
-    },
-    toggleHorizontalFlip: (horizontalFlip: any) => {
-      dispatch({
-        type: ActionType.TOGGLE_HORIZONTAL_FLIP,
-        payload: horizontalFlip
-      })
-    },
-    toggleVerticalFlip: (verticalFlip: any) => {
-      dispatch({
-        type: ActionType.TOGGLE_VERTICAL_FLIP,
-        payload: verticalFlip
-      })
-    },
-    resetRotate: () => {
-      dispatch({
-        type: ActionType.RESET_ROTATE
-      })
-    },
-    setImgURL: (imgURL: any) => {
-      dispatch({
-        type: ActionType.SET_IMG_URL,
-        payload: imgURL
-      })
-    },
-    handleScaleChange: (value: any) => {
-      dispatch({
-        type: ActionType.HANDLE_SCALE_CHANGE,
-        payload: value
-      })
-    },
-    setCropDivClickedResizeRegion: (flag: any) => {
-      dispatch({ type: ActionType.SET_RESIZE_REGION_CLICKED, payload: flag })
-    },
-    setCropDivSize: (region: any, width: any, height: any) => {
-      dispatch({
-        type: ActionType.SET_CROP_DIV_SIZE,
-        payload: { region, width, height }
-      })
-    },
-    setCropDivLeftAndTop: (top: any, left: any) => {
-      dispatch({
-        type: ActionType.SET_CROP_DIV_LEFT_AND_TOP,
-        payload: { top, left }
-      })
-    },
-    setCropDivLeftAndTopPlain: (top: any, left: any) => {
-      dispatch({
-        type: ActionType.SET_CROP_DIV_LEFT_AND_TOP_PLAIN,
-        payload: { top, left }
-      })
-    },
-    handleCropImage: (cropImage: any) => {
-      dispatch({ type: ActionType.CROP_IMAGE, payload: cropImage })
-    },
-    handleUploadedFile: (e: any) => {
-      dispatch({ type: ActionType.HANDLE_FILE_UPLOAD, payload: e })
-    }
+    connectDropTarget: connect.dropTarget(),
+    isOver: monitor.isOver(),
+    canDrop: monitor.canDrop(),
+    itemType: monitor.getItemType(),
+    monitor: monitor
   }
 }
 
 export default connect(
   mapStateToProps,
-  mapDispatchToProps
+  createActions
+  // @ts-ignore
 )(DropTarget('crop-div', canvasTarget, collect)(Canvas))
